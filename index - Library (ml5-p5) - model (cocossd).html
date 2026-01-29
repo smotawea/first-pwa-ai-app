@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Pro Hello World</title>
+    <link rel="manifest" href="./public/manifest.json">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; margin: 0; background: #f0f0f0; }
+        #status { background: #333; color: white; padding: 10px; }
+        #canvas-container { display: flex; justify-content: center; padding: 20px; }
+        canvas { border-radius: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        .label { font-size: 1.5em; font-weight: bold; margin-top: 15px; color: #28a745; }
+        .controls { margin-top: 15px; display: flex; justify-content: center; gap: 10px; }
+        button, .file-label { padding: 12px 20px; cursor: pointer; border-radius: 8px; border: none; background: #007bff; color: white; font-weight: bold; }
+        #fileInput { display: none; }
+    </style>
+</head>
+<body>
+    <div id="status">Loading Pro AI (COCO-SSD)...</div>
+
+    <div class="controls">
+        <button id="toggleBtn" onclick="toggleInput()">Use Camera</button>
+        <label for="fileInput" class="file-label">Upload Photo</label>
+        <input type="file" id="fileInput" accept="image/*" onchange="handleFile(this.files)">
+    </div>
+
+    <div id="canvas-container"></div>
+    <div class="label" id="result">Initializing...</div>
+
+    <script>
+        let objectDetector;
+        let video;
+        let currentImg;
+        let isVideo = false;
+
+        function preload() {
+            currentImg = loadImage('./public/assets/cat.jpg');
+        }
+
+        function setup() {
+            const canvas = createCanvas(320, 240);
+            canvas.parent('canvas-container');
+            // Start loading the detector immediately
+            objectDetector = ml5.objectDetector('cocossd', modelReady);
+        }
+
+        function modelReady() {
+            document.getElementById('status').innerText = "Pro AI Ready";
+            refreshSource();
+        }
+
+        function toggleInput() {
+            isVideo = !isVideo;
+            document.getElementById('toggleBtn').innerText = isVideo ? "Use Photo Mode" : "Use Camera";
+
+            if (isVideo) {
+                if (!video) {
+                    // Start Video Capture
+                    video = createCapture(VIDEO);
+                    video.size(320, 240);
+                    video.hide();
+                    // CRITICAL FIX: Only start detecting when video data is ready
+                    video.elt.onloadeddata = () => {
+                        console.log("Video data loaded, starting detection");
+                        detect();
+                    };
+                }
+            }
+            refreshSource();
+        }
+
+        function handleFile(files) {
+            if (files.length > 0) {
+                let reader = new FileReader();
+                reader.onload = (e) => loadImage(e.target.result, (img) => {
+                    currentImg = img;
+                    isVideo = false;
+                    document.getElementById('toggleBtn').innerText = "Use Camera";
+                    refreshSource();
+                });
+                reader.readAsDataURL(files[0]);
+            }
+        }
+
+        function refreshSource() {
+            if (!isVideo) {
+                image(currentImg, 0, 0, width, height);
+                detect();
+            }
+        }
+
+        function draw() {
+            if (isVideo && video) {
+                image(video, 0, 0, width, height);
+            }
+        }
+
+        function detect() {
+            const source = isVideo ? video : currentImg;
+            // Only try to detect if source exists and is ready
+            if (source) {
+                objectDetector.detect(source, gotResult);
+            }
+        }
+
+        function gotResult(err, results) {
+            if (err) {
+                console.error(err);
+                return;
+            }
+
+            let labelDiv = document.getElementById('result');
+
+            if (results && results.length > 0) {
+                labelDiv.innerText = `${results[0].label} (${Math.round(results[0].confidence * 100)}%)`;
+
+                // Clear and redraw to show boxes
+                if (!isVideo) image(currentImg, 0, 0, width, height);
+                stroke(0, 255, 0);
+                noFill();
+                strokeWeight(3);
+                rect(results[0].x, results[0].y, results[0].width, results[0].height);
+            } else {
+                labelDiv.innerText = "Nothing detected";
+            }
+
+            // Loop detection for live video
+            if (isVideo) {
+                detect();
+            }
+        }
+    </script>
+</body>
+</html>

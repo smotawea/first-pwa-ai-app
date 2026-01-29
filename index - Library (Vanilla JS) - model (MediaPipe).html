@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro AI PWA - MediaPipe</title>
+    <link rel="manifest" href="./public/manifest.json">
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; margin: 0; background: #f0f0f0; }
+        #status { background: #333; color: white; padding: 10px; }
+        #container { position: relative; display: inline-block; margin-top: 20px; }
+        canvas { border-radius: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); background: white; }
+        .controls { margin: 15px; display: flex; justify-content: center; gap: 10px; }
+        button, .file-label { padding: 12px 20px; cursor: pointer; border-radius: 8px; border: none; background: #28a745; color: white; font-weight: bold; }
+        #fileInput { display: none; }
+        .label { font-size: 1.5em; font-weight: bold; margin-top: 15px; color: #333; }
+    </style>
+</head>
+<body>
+    <div id="status">Loading MediaPipe AI...</div>
+
+    <div class="controls">
+        <button id="toggleBtn" onclick="toggleCamera()">Start Camera</button>
+        <label for="fileInput" class="file-label">Upload Photo</label>
+        <input type="file" id="fileInput" accept="image/*" onchange="handleFile(event)">
+    </div>
+
+    <div id="container">
+        <canvas id="canvas"></canvas>
+        <video id="webcam" style="display:none" autoplay playsinline></video>
+    </div>
+    <div class="label" id="result">Initializing...</div>
+
+    <script type="module">
+        import { ObjectDetector, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0";
+
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        const video = document.getElementById("webcam");
+        const status = document.getElementById("status");
+        const resultLabel = document.getElementById("result");
+
+        let objectDetector;
+        let isVideo = false;
+        let currentImage = new Image();
+
+        // Initialize MediaPipe
+        async function initializeDetector() {
+            const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm");
+            objectDetector = await ObjectDetector.createFromOptions(vision, {
+                baseOptions: {
+                    modelAssetPath: `https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite`,
+                    delegate: "GPU"
+                },
+                scoreThreshold: 0.5,
+                runningMode: "IMAGE"
+            });
+            status.innerText = "Pro AI Ready";
+            loadDefaultImage();
+        }
+
+        function loadDefaultImage() {
+            currentImage.src = "./public/assets/cat.jpg";
+            currentImage.onload = () => {
+                canvas.width = 320;
+                canvas.height = 240;
+                processImage(currentImage);
+            };
+        }
+
+        window.handleFile = function(event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                currentImage.src = e.target.result;
+                currentImage.onload = () => {
+                    isVideo = false;
+                    processImage(currentImage);
+                };
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function processImage(img) {
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            if (objectDetector) {
+                const detections = await objectDetector.detect(img);
+                displayResults(detections);
+            }
+        }
+
+        window.toggleCamera = async function() {
+            if (!isVideo) {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                isVideo = true;
+                document.getElementById("toggleBtn").innerText = "Stop Camera";
+                await objectDetector.setOptions({ runningMode: "VIDEO" });
+                detectVideo();
+            } else {
+                isVideo = false;
+                const stream = video.srcObject;
+                stream.getTracks().forEach(track => track.stop());
+                document.getElementById("toggleBtn").innerText = "Start Camera";
+                await objectDetector.setOptions({ runningMode: "IMAGE" });
+                processImage(currentImage);
+            }
+        }
+
+        async function detectVideo() {
+            if (!isVideo) return;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const detections = await objectDetector.detectForVideo(video, performance.now());
+            displayResults(detections);
+            window.requestAnimationFrame(detectVideo);
+        }
+
+        function displayResults(detections) {
+            ctx.strokeStyle = "#00FF00";
+            ctx.lineWidth = 3;
+            ctx.font = "18px Arial";
+            ctx.fillStyle = "#00FF00";
+
+            if (detections.detections.length > 0) {
+                const det = detections.detections[0];
+                const label = det.categories[0].categoryName;
+                const score = Math.round(det.categories[0].score * 100);
+
+                resultLabel.innerText = `${label} (${score}%)`;
+
+                // Draw Box
+                const box = det.boundingBox;
+                // Scale coordinates back to canvas size
+                ctx.strokeRect(box.originX, box.originY, box.width, box.height);
+            } else {
+                resultLabel.innerText = "Nothing detected";
+            }
+        }
+
+        initializeDetector();
+    </script>
+</body>
+</html>

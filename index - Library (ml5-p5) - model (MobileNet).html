@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Hello World PWA</title>
+    <link rel="manifest" href="./public/manifest.json">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; margin: 0; background: #f0f0f0; }
+        #status { background: #333; color: white; padding: 10px; }
+        #canvas-container { display: flex; justify-content: center; padding: 20px; }
+        canvas { border-radius: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        .label { font-size: 1.5em; font-weight: bold; margin-top: 15px; color: #007bff; }
+        .controls { margin-top: 15px; display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+
+        /* Styled buttons */
+        button, .file-label { padding: 12px 20px; font-size: 0.9em; cursor: pointer; border-radius: 8px; border: none; background: #007bff; color: white; font-weight: bold; transition: 0.3s; }
+        button:hover, .file-label:hover { background: #0056b3; }
+
+        /* Hidden actual file input */
+        #fileInput { display: none; }
+    </style>
+</head>
+<body>
+    <div id="status">PWA v1.0 - Loading AI...</div>
+
+    <div class="controls">
+        <button id="toggleBtn" onclick="toggleInput()">Use Camera</button>
+
+        <label for="fileInput" class="file-label">Upload New Photo</label>
+        <input type="file" id="fileInput" accept="image/*" onchange="handleFile(this.files)">
+    </div>
+
+    <div id="canvas-container"></div>
+    <div class="label" id="result">Initializing...</div>
+
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./public/sw.js', { scope: '/' });
+        }
+
+        let classifier;
+        let video;
+        let currentImg; // Stores whatever image is currently being shown
+        let defaultImg; // Stores your cat.jpg
+        let isVideo = false;
+
+        function preload() {
+            defaultImg = loadImage('./public/assets/cat.jpg');
+        }
+
+        function setup() {
+            const canvas = createCanvas(320, 240);
+            canvas.parent('canvas-container');
+            currentImg = defaultImg;
+
+            // Initialize classifier
+            classifier = ml5.imageClassifier('MobileNet', modelReady);
+        }
+
+        function modelReady() {
+            document.getElementById('status').innerText = "AI Ready";
+            refreshSource();
+        }
+
+        function toggleInput() {
+            isVideo = !isVideo;
+            const btn = document.getElementById('toggleBtn');
+
+            if (isVideo) {
+                btn.innerText = "Use Photo Mode";
+                if (!video) {
+                    video = createCapture(VIDEO);
+                    video.size(320, 240);
+                    video.hide();
+                }
+            } else {
+                btn.innerText = "Use Camera";
+            }
+            refreshSource();
+        }
+
+        // Logic to handle the user picking a new file
+        function handleFile(files) {
+            if (files.length > 0) {
+                let file = files[0];
+                let reader = new FileReader();
+                reader.onload = function(e) {
+                    // Create a new p5 image from the uploaded file
+                    loadImage(e.target.result, (loadedImg) => {
+                        currentImg = loadedImg;
+                        isVideo = false; // Switch to photo mode automatically
+                        document.getElementById('toggleBtn').innerText = "Use Camera";
+                        refreshSource();
+                    });
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function refreshSource() {
+            if (!isVideo) {
+                // Clear and draw the new/default image
+                background(240);
+                image(currentImg, 0, 0, width, height);
+            }
+            classifyInput();
+        }
+
+        function draw() {
+            if (isVideo && video) {
+                image(video, 0, 0, width, height);
+            }
+        }
+
+        function classifyInput() {
+            const source = isVideo ? video : currentImg;
+            if (source) classifier.classify(source, gotResult);
+        }
+
+        /*
+        function classifyInput() {
+            const source = isVideo ? video : currentImg;
+
+            // Tweak: Higher accuracy by ensuring the AI gets the best possible look
+            const options = {
+                topk: 3, // Look for top 3 guesses
+                probabilityThreshold: 0.05
+            };
+
+            if (source) {
+                classifier.classify(source, options, gotResult);
+            }
+        }
+        */
+
+        function gotResult(error, results) {
+            if (error) return;
+            document.getElementById('result').innerText = results[0].label;
+            if (isVideo) classifyInput();
+        }
+    </script>
+</body>
+</html>
