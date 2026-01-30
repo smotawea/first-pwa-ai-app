@@ -35,10 +35,31 @@
 
     <script type="module">
         // PWA Fix: Register the Service Worker
+        /*
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./public/sw.js')
                 .then(() => console.log("PWA: Service Worker Registered"))
                 .catch(err => console.error("PWA: Registration Failed", err));
+        }
+        */
+
+        // PWA Fix: Register the Service Worker with Update Notification
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./public/sw.js').then(reg => {
+                reg.addEventListener('updatefound', () => {
+                    const newWorker = reg.installing;
+                    newWorker.addEventListener('statechange', () => {
+                        // Check if the new worker has finished installing
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            // 1. Tell the user a new version is available
+                            // 2. Give them control to accept (OK) or remain (Cancel)
+                            if (confirm("New version available! Would you like to update now?")) {
+                                window.location.reload();
+                            }
+                        }
+                    });
+                });
+            });
         }
 
         import { ObjectDetector, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0";
@@ -64,7 +85,7 @@
                 scoreThreshold: 0.5,
                 runningMode: "IMAGE"
             });
-            status.innerText = "Pro AI Ready";
+            status.innerText = "Pro AI Ready V2.0";
             loadDefaultImage();
         }
 
