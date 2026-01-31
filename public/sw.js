@@ -1,5 +1,5 @@
 // Change 'v1' to 'v2' to force the phone to download the new version
-const CACHE_NAME = 'pwa-hello-world-v2';
+const CACHE_NAME = 'pwa-hello-world-v3';
 
 // All paths are relative to where index.html is, but since the SW
 // is inside /public/, we use absolute-style paths from the root.
@@ -12,13 +12,21 @@ const ASSETS = [
 
 // Install: Save files to phone memory
 self.addEventListener('install', (event) => {
-    self.skipWaiting(); // Force the waiting service worker to become the active one immediately
+    // REMOVED self.skipWaiting(); <--- This is why it wasn't showing the popup
+    // self.skipWaiting(); // Force the waiting service worker to become the active one immediately
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
             console.log('SW: Caching App Shell');
             return cache.addAll(ASSETS);
         })
     );
+});
+
+// Add this to listen for the "OK" click from the popup
+self.addEventListener('message', (event) => {
+    if (event.data === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
 });
 
 // Fetch: Serve files from phone memory (Offline support)

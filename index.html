@@ -34,6 +34,7 @@
     <div class="label" id="result">Initializing...</div>
 
     <script type="module">
+
         // PWA Fix: Register the Service Worker
         /*
         if ('serviceWorker' in navigator) {
@@ -43,6 +44,7 @@
         }
         */
 
+        /*
         // PWA Fix: Register the Service Worker with Update Notification
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./public/sw.js').then(reg => {
@@ -61,6 +63,38 @@
                 });
             });
         }
+        */
+
+
+        // PWA Fix: Register the Service Worker with Update Notification
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./public/sw.js').then(reg => {
+                reg.onupdatefound = () => {
+                    const installingWorker = reg.installing;
+                    installingWorker.onstatechange = () => {
+                        // Check if the new worker has finished installing
+                        if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            // 1. Tell the user a new version is available
+                            // 2. Give them control to accept (OK) or remain (Cancel)
+                            if (confirm("New version available! Update now?")) {
+                                // Tell the SW to skip waiting and activate
+                                installingWorker.postMessage('SKIP_WAITING');
+                            }
+                        }
+                    };
+                };
+            });
+
+            // This part actually reloads the page once the new SW takes over
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (!refreshing) {
+                    window.location.reload();
+                    refreshing = true;
+                }
+            });
+        }
+
 
         import { ObjectDetector, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0";
 
@@ -85,7 +119,7 @@
                 scoreThreshold: 0.5,
                 runningMode: "IMAGE"
             });
-            status.innerText = "Pro AI Ready V2.0";
+            status.innerText = "Pro AI Ready V3.0";
             loadDefaultImage();
         }
 
